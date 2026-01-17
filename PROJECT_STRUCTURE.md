@@ -3,18 +3,13 @@
 This document outlines a suggested Python project layout for analyzing transactions,
 portfolio holdings, returns, and dividends across funds, ETFs, and equities. It
 assumes transaction reports and holding snapshots arrive as separate data sources.
+Raw and derived datasets should live outside the repository and be passed in via
+explicit paths or environment configuration.
 
 ## High-level layout
 
 ```
 src/
-├── data/
-│   ├── raw/
-│   │   ├── transactions/          # broker exports, trade confirmations
-│   │   ├── holdings/              # end-of-day or month-end snapshots
-│   │   └── reference/             # security master, FX rates, benchmarks
-│   ├── interim/                   # cleaned, normalized, de-duplicated files
-│   └── curated/                   # analytics-ready tables
 ├── notebooks/                     # exploratory analysis
 ├── src/
 │   ├── __init__.py
