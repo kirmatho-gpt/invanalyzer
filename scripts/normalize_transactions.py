@@ -6,9 +6,9 @@ import csv
 from pathlib import Path
 from typing import Dict, Iterable, List
 
-from invanalyzer.config import load_account_brokers
-from invanalyzer.ingestion.ii import parse_ii_transactions
-from invanalyzer.normalization.transactions import TransactionRecord
+from config import load_account_brokers
+from ingestion.ii import parse_ii_transactions
+from normalization.transactions import TransactionRecord
 
 
 def _find_transaction_files(root: Path) -> List[Path]:
@@ -70,21 +70,21 @@ def main() -> None:
         "--input",
         dest="input_root",
         type=Path,
-        default=Path("data/raw/transactions"),
-        help="Directory containing raw transaction files.",
+        required=True,
+        help="Directory containing raw transaction files (outside the repo).",
     )
     parser.add_argument(
         "--output",
         dest="output_root",
         type=Path,
-        default=Path("data/interim/transactions"),
-        help="Directory to write normalized transaction files.",
+        required=True,
+        help="Directory to write normalized transaction files (outside the repo).",
     )
     parser.add_argument(
         "--config",
         dest="config_path",
         type=Path,
-        default=Path("src/invanalyzer/config/accounts.json"),
+        default=Path("src/config/accounts.json"),
         help="Path to account-to-broker config JSON.",
     )
     args = parser.parse_args()
