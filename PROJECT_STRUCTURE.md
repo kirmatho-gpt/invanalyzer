@@ -7,7 +7,7 @@ assumes transaction reports and holding snapshots arrive as separate data source
 ## High-level layout
 
 ```
-invanalyzer/
+src/
 ├── data/
 │   ├── raw/
 │   │   ├── transactions/          # broker exports, trade confirmations
@@ -17,17 +17,16 @@ invanalyzer/
 │   └── curated/                   # analytics-ready tables
 ├── notebooks/                     # exploratory analysis
 ├── src/
-│   └── invanalyzer/
-│       ├── __init__.py
-│       ├── config/                # configuration defaults, schema definitions
-│       ├── ingestion/             # readers/parsers for broker formats
-│       ├── normalization/         # clean + map raw inputs to canonical schema
-│       ├── reference/             # security master + corporate actions helpers
-│       ├── positions/             # position building from transactions
-│       ├── performance/           # returns, PnL, attribution
-│       ├── dividends/             # dividend accruals and cash flow analysis
-│       ├── reporting/             # tables, charts, exports
-│       └── cli.py                  # command-line entry points
+│   ├── __init__.py
+│   ├── config/                # configuration defaults, schema definitions
+│   ├── ingestion/             # readers/parsers for broker formats
+│   ├── normalization/         # clean + map raw inputs to canonical schema
+│   ├── reference/             # security master + corporate actions helpers
+│   ├── positions/             # position building from transactions
+│   ├── performance/           # returns, PnL, attribution
+│   ├── dividends/             # dividend accruals and cash flow analysis
+│   ├── reporting/             # tables, charts, exports
+│   └── cli.py                  # command-line entry points
 ├── tests/
 │   ├── unit/
 │   └── integration/
