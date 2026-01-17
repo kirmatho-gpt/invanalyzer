@@ -1,0 +1,1 @@
+"""Broker ingestion adapters."""

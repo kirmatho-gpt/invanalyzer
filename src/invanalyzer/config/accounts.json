@@ -1,0 +1,6 @@
+{
+  "default_broker": "ii",
+  "accounts": {
+    "example_account": "ii"
+  }
+}
