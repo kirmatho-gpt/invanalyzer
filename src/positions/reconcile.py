@@ -74,19 +74,12 @@ def _read_holdings(path: Path) -> Dict[str, Decimal]:
 def _infer_signed_quantity(record: TransactionRow) -> Optional[Decimal]:
     if record.quantity is None:
         return None
-    if record.quantity < 0:
-        return record.quantity
-
-    description = (record.description or "").lower()
-    if any(token in description for token in ("sell", "sold", "sell out", "sell-out")):
-        return -record.quantity
-
     if record.debit is not None and record.credit is None:
         return record.quantity
     if record.credit is not None and record.debit is None:
         return -record.quantity
 
-    return record.quantity
+    return None
 
 
 def build_positions(
