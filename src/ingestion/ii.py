@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from src.normalization.holdings import HoldingRecord
-from src.normalization.transactions import TransactionRecord
+from src.normalization.transactions import TransactionRecord, normalize_transaction_description
 
 
 DATE_FORMAT = "%d/%m/%Y"
@@ -112,7 +112,7 @@ def parse_ii_transactions(path: Path, account_name: str, broker: str) -> Iterabl
             sedol = _normalize_text(row.get("Sedol", ""))
             quantity = _parse_decimal(row.get("Quantity", ""))
             price = _parse_decimal(row.get("Price", ""))
-            description = _normalize_text(row.get("Description", ""))
+            description = normalize_transaction_description(_normalize_text(row.get("Description", "")))
             reference = _normalize_text(row.get("Reference", ""))
             debit = _parse_decimal(row.get("Debit", ""))
             credit = _parse_decimal(row.get("Credit", ""))

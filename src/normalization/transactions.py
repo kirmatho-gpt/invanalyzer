@@ -6,6 +6,24 @@ from decimal import Decimal
 from typing import Dict, Optional
 
 
+def normalize_transaction_description(description: Optional[str]) -> Optional[str]:
+    if description is None:
+        return None
+    cleaned = description.strip()
+    if not cleaned:
+        return None
+    normalized = cleaned.casefold()
+    if normalized == "gross interest":
+        return "account interest"
+    if normalized == "debit card payment":
+        return "debit card payment"
+    if normalized == "total monthly fee":
+        return "fees"
+    if normalized.startswith("div "):
+        return "dividend"
+    raise ValueError(f"Unexpected transaction description: {description}")
+
+
 @dataclass(frozen=True)
 class TransactionRecord:
     transaction_id: str
