@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Optional
 
-from normalization.transactions import TransactionRecord
+from src.normalization.transactions import TransactionRecord
 
 
 DATE_FORMAT = "%d/%m/%Y"
