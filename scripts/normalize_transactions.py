@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List
 
 from src.config import load_account_brokers
 from src.ingestion.ii import parse_ii_transactions
+from src.ingestion.hsbc import parse_hsbc_transactions
 from src.normalization.transactions import TransactionRecord
 
 
@@ -35,6 +36,8 @@ def _broker_for_account(account_name: str, mapping: Dict[str, str]) -> str:
 def _parse_transactions(path: Path, broker: str, account_name: str) -> Iterable[TransactionRecord]:
     if broker == "ii":
         return parse_ii_transactions(path, account_name=account_name, broker=broker)
+    elif broker == "hsbc":
+        return parse_hsbc_transactions(path, account_name=account_name, broker=broker)
     raise ValueError(f"Unsupported broker: {broker}")
 
 
