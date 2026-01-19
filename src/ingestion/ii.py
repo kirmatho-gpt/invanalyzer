@@ -8,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Optional
 
+from src.normalization.holdings import HoldingRecord
 from src.normalization.transactions import TransactionRecord
 
 
@@ -26,6 +27,29 @@ def _parse_decimal(value: str) -> Optional[Decimal]:
     cleaned = value.replace("£", "").replace(",", "").strip()
     if not cleaned:
         return None
+    return Decimal(cleaned)
+
+
+def _parse_percent(value: str) -> Optional[Decimal]:
+    if not value or value.strip().lower() == "n/a":
+        return None
+    cleaned = value.replace("%", "").replace(",", "").strip()
+    if not cleaned:
+        return None
+    return Decimal(cleaned)
+
+
+def _parse_price(value: str) -> Optional[Decimal]:
+    if not value or value.strip().lower() == "n/a":
+        return None
+    cleaned = value.replace("£", "").replace(",", "").strip()
+    if not cleaned:
+        return None
+    if cleaned.endswith("p"):
+        pence = cleaned[:-1].strip()
+        if not pence:
+            return None
+        return Decimal(pence) / Decimal("100")
     return Decimal(cleaned)
 
 
@@ -51,6 +75,27 @@ def _transaction_id(record: TransactionRecord) -> str:
             f"{record.debit}" if record.debit is not None else "",
             f"{record.credit}" if record.credit is not None else "",
             f"{record.running_balance}" if record.running_balance is not None else "",
+            record.currency or "",
+        ]
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _snapshot_id(record: HoldingRecord) -> str:
+    raw = "|".join(
+        [
+            record.account_name,
+            record.broker,
+            record.valuation_date.isoformat() if record.valuation_date else "",
+            record.symbol or "",
+            record.name or "",
+            f"{record.quantity}" if record.quantity is not None else "",
+            f"{record.price}" if record.price is not None else "",
+            f"{record.average_price}" if record.average_price is not None else "",
+            f"{record.market_value}" if record.market_value is not None else "",
+            f"{record.book_cost}" if record.book_cost is not None else "",
+            f"{record.gain_loss}" if record.gain_loss is not None else "",
+            f"{record.gain_loss_pct}" if record.gain_loss_pct is not None else "",
             record.currency or "",
         ]
     )
@@ -92,4 +137,46 @@ def parse_ii_transactions(path: Path, account_name: str, broker: str) -> Iterabl
                 source_file=path.name,
             )
             record = record.__class__(**{**asdict(record), "transaction_id": _transaction_id(record)})
+            yield record
+
+
+def parse_ii_holdings(
+    path: Path,
+    account_name: str,
+    broker: str,
+    valuation_date: datetime.date,
+) -> Iterable[HoldingRecord]:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            symbol = _normalize_text(row.get("Symbol", ""))
+            name = _normalize_text(row.get("Name", ""))
+            if not symbol:
+                continue
+            quantity = _parse_decimal(row.get("Qty", ""))
+            price = _parse_price(row.get("Price", ""))
+            market_value = _parse_decimal(row.get("Market Value £", "")) or _parse_decimal(row.get("Market Value", ""))
+            book_cost = _parse_decimal(row.get("Book Cost", ""))
+            gain_loss = _parse_decimal(row.get("Gain/Loss", ""))
+            gain_loss_pct = _parse_percent(row.get("Gain/Loss %", ""))
+            average_price = _parse_price(row.get("Average Price", ""))
+
+            record = HoldingRecord(
+                snapshot_id="",
+                account_name=account_name,
+                broker=broker,
+                valuation_date=valuation_date,
+                symbol=symbol,
+                name=name,
+                quantity=quantity,
+                price=price,
+                average_price=average_price,
+                market_value=market_value,
+                book_cost=book_cost,
+                gain_loss=gain_loss,
+                gain_loss_pct=gain_loss_pct,
+                currency="GBP",
+                source_file=path.name,
+            )
+            record = record.__class__(**{**asdict(record), "snapshot_id": _snapshot_id(record)})
             yield record
