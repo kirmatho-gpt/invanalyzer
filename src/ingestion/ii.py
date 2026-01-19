@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from src.normalization.holdings import HoldingRecord
-from src.normalization.transactions import TransactionRecord, normalize_transaction_description
+from src.normalization.transactions import TransactionRecord
 
 
 DATE_FORMAT = "%d/%m/%Y"
@@ -57,6 +57,28 @@ def _normalize_text(value: str) -> Optional[str]:
     if not value or value.strip().lower() == "n/a":
         return None
     return value.strip()
+
+
+def _normalize_transaction_description(description: Optional[str]) -> Optional[str]:
+    if description is None:
+        return None
+    cleaned = description.strip()
+    if not cleaned:
+        return None
+    normalized = cleaned.casefold()
+    if normalized == "gross interest":
+        return "account interest"
+    if normalized == "debit card payment":
+        return "debit card payment"
+    if normalized == "total monthly fee" or normalized.startswith("cash"):
+        return "fees"
+    if normalized == "recommend ii" or normalized.startswith("cash"):
+        return "cash advantage"
+    if normalized.startswith("div ") or normalized.startswith("dividend "):
+        return "dividend"
+    if " del " in normalized or " bal " in normalized:
+        return "buy/sell" 
+    raise ValueError(f"Unexpected transaction description: {description}")
 
 
 def _transaction_id(record: TransactionRecord) -> str:
@@ -112,10 +134,16 @@ def parse_ii_transactions(path: Path, account_name: str, broker: str) -> Iterabl
             sedol = _normalize_text(row.get("Sedol", ""))
             quantity = _parse_decimal(row.get("Quantity", ""))
             price = _parse_decimal(row.get("Price", ""))
-            description = normalize_transaction_description(_normalize_text(row.get("Description", "")))
+            description = _normalize_transaction_description(_normalize_text(row.get("Description", "")))
             reference = _normalize_text(row.get("Reference", ""))
             debit = _parse_decimal(row.get("Debit", ""))
             credit = _parse_decimal(row.get("Credit", ""))
+            # refine description 
+            if description == "buy/sell":
+                if debit is not None and credit is None:
+                    description = "buy"
+                elif credit is not None and debit is None:
+                    description = "sell"
             running_balance = _parse_decimal(row.get("Running Balance", ""))
 
             record = TransactionRecord(

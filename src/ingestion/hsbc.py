@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Optional
 
-from src.normalization.transactions import TransactionRecord, normalize_transaction_description
+from src.normalization.transactions import TransactionRecord
 
 
 DATE_FORMATS = ("%d %b %Y", "%d %b %Y %H:%M")
@@ -42,6 +42,24 @@ def _normalize_text(value: str) -> Optional[str]:
     if not value or value.strip().lower() == "n/a":
         return None
     return value.strip()
+
+
+def _normalize_transaction_description(description: Optional[str]) -> Optional[str]:
+    if description is None:
+        return None
+    cleaned = description.strip()
+    if not cleaned:
+        return None
+    normalized = cleaned.casefold()
+    if normalized == "bought":
+        return "buy"
+    if normalized == "sold":
+        return "sell"
+    if normalized == "cash dividend received":
+        return "dividend"
+    if normalized == "interest received":
+        return "account interest"
+    raise ValueError(f"Unexpected transaction description: {description}")
 
 
 def _transaction_id(record: TransactionRecord) -> str:
@@ -88,7 +106,7 @@ def parse_hsbc_transactions(path: Path, account_name: str, broker: str) -> Itera
         for row in reader:
             trade_date = _parse_date(row.get("Transaction Date", ""))
             settlement_date = trade_date
-            description = normalize_transaction_description(
+            description = _normalize_transaction_description(
                 _normalize_text(row.get("Transaction Description", ""))
             )
             symbol = _normalize_text(row.get("Product Short Name", ""))
