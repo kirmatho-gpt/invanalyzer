@@ -124,7 +124,7 @@ def parse_ii_transactions(path: Path, account_name: str, broker: str) -> Iterabl
                 broker=broker,
                 trade_date=trade_date,
                 settlement_date=settlement_date,
-                symbol=symbol,
+                symbol=symbol or sedol, # replace symbol with sedol if missing
                 sedol=sedol,
                 quantity=quantity,
                 price=price,
