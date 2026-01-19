@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Optional
 
-from src.normalization.transactions import TransactionRecord
+from src.normalization.transactions import TransactionRecord, normalize_transaction_description
 
 
 DATE_FORMATS = ("%d %b %Y", "%d %b %Y %H:%M")
@@ -88,7 +88,9 @@ def parse_hsbc_transactions(path: Path, account_name: str, broker: str) -> Itera
         for row in reader:
             trade_date = _parse_date(row.get("Transaction Date", ""))
             settlement_date = trade_date
-            description = _normalize_text(row.get("Transaction Description", ""))
+            description = normalize_transaction_description(
+                _normalize_text(row.get("Transaction Description", ""))
+            )
             symbol = _normalize_text(row.get("Product Short Name", ""))
             sedol = _normalize_text(row.get("Product Code", ""))
             quantity = _parse_decimal(row.get("No. of Units", ""))
