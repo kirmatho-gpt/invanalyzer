@@ -18,7 +18,11 @@ from src.normalization.transactions import TransactionRecord
 
 
 def _find_transaction_files(root: Path) -> List[Path]:
-    return sorted(root.glob("transactions_*_*.csv"))
+    patterns = ["transactions_*_*.csv", "transactions_*_*.txt"]
+    files = []
+    for pattern in patterns:
+        files.extend(root.glob(pattern)) 
+    return sorted(files)
 
 
 def _extract_account_name(path: Path) -> str:

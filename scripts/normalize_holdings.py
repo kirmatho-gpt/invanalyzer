@@ -25,7 +25,11 @@ DATE_PATTERNS = (
 
 
 def _find_holding_files(root: Path) -> List[Path]:
-    return sorted(root.glob("holdings_*_*.csv"))
+    patterns = ["holdings_*_*.csv", "holdings_*_*.txt"]
+    files = []
+    for pattern in patterns:
+        files.extend(root.glob(pattern)) 
+    return sorted(files)
 
 
 def _extract_date_from_stem(stem: str) -> Tuple[datetime.date, str]:
