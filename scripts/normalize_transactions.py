@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+# Add project root to sys.path so 'src' can be imported when running directly
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import argparse
 import csv
 from pathlib import Path
@@ -58,6 +63,9 @@ def normalize_transactions(raw_root: Path, output_root: Path, config_path: Path)
                 continue
             seen_ids.add(record.transaction_id)
             grouped.setdefault(account_name, []).append(record)
+    
+    for account_name in grouped:
+        grouped[account_name].sort(key=lambda r: r.trade_date)
 
     for account_name, records in grouped.items():
         output_path = output_root / account_name / "transactions_normalized.csv"
