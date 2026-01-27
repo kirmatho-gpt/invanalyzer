@@ -1,0 +1,16 @@
+Examples of commands for scripts:
+
+--- Convert transactions to normalized transactions (all accounts) ---
+python -m scripts.normalize_transactions --input ~/Dev/src/data/invanalyzer/transactions/ --output ~/Dev/src/data/invanalyzer/normalized/
+
+
+--- Convert holdings to normalized holdings (all accounts) ---
+python -m scripts.normalize_holdings --input ~/Dev/src/data/invanalyzer/holdings/ --output ~/Dev/src/data/invanalyzer/normalized/
+
+
+--- Reconcile positions (only) from normalized data for given account ---
+python -m scripts.reconcile_positions --normalized-root ~/Dev/src/data/invanalyzer/normalized/trading_thiago
+
+
+--- Generate income report (dividens, interest, fees) for accounts ---
+python -m scripts.report_income_summary --transactions ~/Dev/src/data/invanalyzer/normalized/ --output ~/Dev/src/data/invanalyzer/reports/income_report.csv {--accounts trading_thiago} 
