@@ -14,6 +14,7 @@ from typing import Dict, Iterable, List, Tuple
 
 from src.config import load_account_brokers
 from src.ingestion.ii import parse_ii_holdings
+from src.ingestion.hsbc import parse_hsbc_holdings
 from src.normalization.holdings import HoldingRecord
 
 
@@ -69,6 +70,13 @@ def _parse_holdings(
             broker=broker,
             valuation_date=valuation_date,
         )
+    elif broker == "hsbc":
+         return parse_hsbc_holdings(
+            path,
+            account_name=account_name,
+            broker=broker,
+            # valuation date is explicitely provided in the holdings file
+        )       
     raise ValueError(f"Unsupported broker: {broker}")
 
 
