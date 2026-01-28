@@ -8,7 +8,7 @@ from pathlib import Path
 # Add project root to sys.path so 'src' can be imported when running directly
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.reporting.imcome_report  import summarize_income, write_income_report
+from src.reporting.income_report  import summarize_income, write_income_report
 
 
 def main() -> None:
