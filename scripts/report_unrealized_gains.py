@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.reporting.unrealized_gain_report import (
     summarize_unrealized_gains,
+    write_combined_unrealized_gain_report,
     write_unrealized_gain_reports,
 )
 
@@ -51,6 +52,24 @@ def main() -> None:
             "When omitted, all accounts are included."
         ),
     )
+    parser.add_argument(
+        "--combined-output",
+        dest="combined_output",
+        type=Path,
+        default=None,
+        help=(
+            "Optional path to write a single combined unrealized gains report "
+            "across all accounts."
+        ),
+    )
+    parser.add_argument(
+        "--combined-all-dates",
+        action="store_true",
+        help=(
+            "Include all valuation dates in the combined report. "
+            "By default, only the latest holdings per account are included."
+        ),
+    )
     args = parser.parse_args()
 
     rows = summarize_unrealized_gains(
@@ -59,6 +78,12 @@ def main() -> None:
         accounts=args.accounts,
     )
     write_unrealized_gain_reports(rows, args.output_root)
+    if args.combined_output:
+        write_combined_unrealized_gain_report(
+            rows,
+            args.combined_output,
+            latest_only=not args.combined_all_dates,
+        )
 
 
 if __name__ == "__main__":

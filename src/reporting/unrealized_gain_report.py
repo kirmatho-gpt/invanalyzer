@@ -209,3 +209,34 @@ def write_unrealized_gain_reports(rows: Iterable[UnrealizedGainRow], output_root
             writer.writeheader()
             for row in grouped_rows:
                 writer.writerow(row.to_dict())
+
+
+def _latest_rows_by_account(rows: Iterable[UnrealizedGainRow]) -> list[UnrealizedGainRow]:
+    rows_list = list(rows)
+    latest_by_account: Dict[str, date] = {}
+    for row in rows_list:
+        current = latest_by_account.get(row.account_name)
+        if current is None or row.valuation_date > current:
+            latest_by_account[row.account_name] = row.valuation_date
+    latest_rows = [
+        row for row in rows_list if row.valuation_date == latest_by_account.get(row.account_name)
+    ]
+    latest_rows.sort(key=lambda row: (row.account_name, row.valuation_date, row.symbol))
+    return latest_rows
+
+
+def write_combined_unrealized_gain_report(
+    rows: Iterable[UnrealizedGainRow],
+    output_path: Path,
+    *,
+    latest_only: bool = True,
+) -> None:
+    rows_list = _latest_rows_by_account(rows) if latest_only else list(rows)
+    if not rows_list:
+        return
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows_list[0].to_dict().keys()))
+        writer.writeheader()
+        for row in rows_list:
+            writer.writerow(row.to_dict())

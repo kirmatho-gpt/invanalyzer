@@ -18,3 +18,7 @@ python -m scripts.report_income_summary --transactions ~/Dev/src/data/invanalyze
 
 --- Generate unrealized gain reports for each holdings snapshot ---
 python -m scripts.report_unrealized_gains --transactions ~/Dev/src/data/invanalyzer/normalized/ --holdings ~/Dev/src/data/invanalyzer/normalized/ --output ~/Dev/src/data/invanalyzer/reports/unrealized {--accounts trading_thiago}
+
+
+--- Generate unrealized gain reports for a group of accounts  ---
+python -m scripts.report_unrealized_gains --transactions ~/Dev/src/data/invanalyzer/normalized/ --holdings ~/Dev/src/data/invanalyzer/normalized/ --output ~/Dev/src/data/invanalyzer/reports/unrealized {--accounts trading_thiago} --combined-output ~/Dev/src/data/invanalyzer/reports/unrealized_gains_report.csv
