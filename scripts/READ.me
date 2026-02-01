@@ -12,7 +12,7 @@ python -m scripts.normalize_holdings --input ~/Dev/src/data/invanalyzer/holdings
 python -m scripts.reconcile_positions --normalized-root ~/Dev/src/data/invanalyzer/normalized/trading_thiago
 
 
---- Generate income report (dividens, interest, fees) for accounts ---
+--- Generate income report (dividens, interest, fees, sell of securities) for accounts ---
 python -m scripts.report_income_summary --transactions ~/Dev/src/data/invanalyzer/normalized/ --output ~/Dev/src/data/invanalyzer/reports/income_report.csv {--accounts trading_thiago}
 
 

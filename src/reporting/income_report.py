@@ -9,6 +9,15 @@ from pathlib import Path
 from typing import Dict, Iterable, Iterator, Optional, Tuple
 
 
+from src.ingestion.normalized import read_normalized_transactions
+from src.normalization.transactions import TransactionRecord
+from src.positions.transaction_utils import (
+    PositionCost,
+    apply_transaction_to_position_costs,
+    effective_date,
+)
+
+
 INCOME_DESCRIPTIONS = {"dividend", "account interest", "fees", "cash advantage"}
 
 
@@ -40,32 +49,43 @@ class IncomeSummary:
         }
 
 
-def _parse_date(value: str) -> Optional[date]:
-    if not value:
-        return None
-    return date.fromisoformat(value)
-
-
-def _parse_decimal(value: str) -> Optional[Decimal]:
-    if not value:
-        return None
-    return Decimal(value)
-
-
-def _read_transactions(path: Path) -> Iterator[IncomeRecord]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            description = (row.get("description") or "").strip() or None
-            if description not in INCOME_DESCRIPTIONS:
-                continue
+def _income_records_from_transactions(transactions: Iterable[TransactionRecord]) -> Iterator[IncomeRecord]:
+    positions: Dict[str, PositionCost] = {}
+    sorted_transactions = sorted(
+        [record for record in transactions if effective_date(record)],
+        key=lambda record: effective_date(record),
+    )
+    for record in sorted_transactions:
+        effective_date_value = effective_date(record)
+        if record.description in INCOME_DESCRIPTIONS:
             yield IncomeRecord(
-                account_name=row.get("account_name", ""),
-                trade_date=_parse_date(row.get("trade_date", "")),
-                symbol=(row.get("symbol") or "").strip() or None,
-                description=description,
-                debit=_parse_decimal(row.get("debit", "")),
-                credit=_parse_decimal(row.get("credit", "")),
+                account_name=record.account_name,
+                trade_date=effective_date_value,
+                symbol=record.symbol,
+                description=record.description,
+                debit=record.debit,
+                credit=record.credit,
+            )
+            continue
+        if record.description in {"buy", "sell"}:
+            gain = apply_transaction_to_position_costs(record, positions)
+            if record.description == "buy":
+                continue
+            if gain is None:
+                continue
+            debit = None
+            credit = None
+            if gain >= 0:
+                credit = gain
+            else:
+                debit = -gain
+            yield IncomeRecord(
+                account_name=record.account_name,
+                trade_date=effective_date_value,
+                symbol=record.symbol,
+                description="sell of securities",
+                debit=debit,
+                credit=credit,
             )
 
 
@@ -88,7 +108,11 @@ def summarize_income(
     account_filter = {name.strip() for name in accounts or [] if name.strip()}
     totals: Dict[Tuple[str, str, str, str], Decimal] = defaultdict(lambda: Decimal("0"))
     for path in sorted(transactions_root.rglob("transactions_normalized.csv")):
-        for record in _read_transactions(path):
+        account_name = path.parent.name
+        if account_filter and account_name not in account_filter:
+            continue
+        transactions = list(read_normalized_transactions(path))
+        for record in _income_records_from_transactions(transactions):
             if account_filter and record.account_name not in account_filter:
                 continue
             month = _month_key(record.trade_date)

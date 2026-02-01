@@ -7,6 +7,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 
+from src.positions.transaction_utils import build_positions
+
 
 @dataclass(frozen=True)
 class TransactionRow:
@@ -69,35 +71,6 @@ def _read_holdings(path: Path) -> Dict[str, Decimal]:
                 continue
             holdings[symbol] = quantity
     return holdings
-
-
-def _infer_signed_quantity(record: TransactionRow) -> Optional[Decimal]:
-    if record.quantity is None:
-        return None
-    if record.description == "buy":
-        return record.quantity
-    if record.description == "sell":
-        return -record.quantity
-
-    return None
-
-
-def build_positions(
-    transactions: Iterable[TransactionRow],
-    valuation_date: date,
-) -> Dict[str, Decimal]:
-    positions: Dict[str, Decimal] = {}
-    for record in transactions:
-        effective_date = record.trade_date or record.settlement_date
-        if not effective_date or effective_date > valuation_date:
-            continue
-        if not record.symbol:
-            continue
-        signed_quantity = _infer_signed_quantity(record)
-        if signed_quantity is None:
-            continue
-        positions[record.symbol] = positions.get(record.symbol, Decimal("0")) + signed_quantity
-    return positions
 
 
 def reconcile_positions(
