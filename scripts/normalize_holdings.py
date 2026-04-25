@@ -101,6 +101,7 @@ def normalize_holdings(raw_root: Path, output_root: Path, config_path: Path) -> 
     for path in _find_holding_files(raw_root):
         account_name, valuation_date = _extract_account_name(path)
         broker = _broker_for_account(account_name, account_brokers)
+        print(f"Processing {path.name} for account '{account_name}' with broker '{broker}' and valuation date {valuation_date}")
         for record in _parse_holdings(
             path,
             broker=broker,

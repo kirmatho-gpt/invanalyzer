@@ -68,6 +68,8 @@ def _normalize_transaction_description(description: Optional[str]) -> Optional[s
     normalized = cleaned.casefold()
     if normalized == "gross interest":
         return "account interest"
+    if normalized == "subscription" or "isa subscription" in normalized:
+        return "subscription"
     if normalized == "debit card payment":
         return "debit card payment"
     if normalized == "total monthly fee" or normalized.startswith("cash"):
@@ -76,7 +78,7 @@ def _normalize_transaction_description(description: Optional[str]) -> Optional[s
         return "cash advantage"
     if normalized.startswith("div ") or normalized.startswith("dividend "):
         return "dividend"
-    if " del " in normalized or " bal " in normalized:
+    if " del " in normalized or " bal " in normalized or "artemis f" in normalized:
         return "buy/sell" 
     raise ValueError(f"Unexpected transaction description: {description}")
 

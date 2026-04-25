@@ -65,12 +65,13 @@ def normalize_transactions(raw_root: Path, output_root: Path, config_path: Path)
     for path in _find_transaction_files(raw_root):
         account_name = _extract_account_name(path)
         broker = _broker_for_account(account_name, account_brokers)
+        print(f"Processing {path.name} for account '{account_name}' with broker '{broker}'")
         for record in _parse_transactions(path, broker=broker, account_name=account_name):
             if record.transaction_id in seen_ids:
                 continue
             seen_ids.add(record.transaction_id)
             grouped.setdefault(account_name, []).append(record)
-    
+
     for account_name in grouped:
         grouped[account_name].sort(key=lambda r: r.trade_date)
 

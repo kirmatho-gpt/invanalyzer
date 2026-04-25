@@ -19,6 +19,8 @@ from src.positions.transaction_utils import (
 
 
 INCOME_DESCRIPTIONS = {"dividend", "account interest", "fees", "cash advantage"}
+PAYMENT_FLOW_DESCRIPTIONS = {"debit card payment", "subscription"}
+TRACKED_CASH_FLOW_DESCRIPTIONS = INCOME_DESCRIPTIONS | PAYMENT_FLOW_DESCRIPTIONS
 
 
 @dataclass(frozen=True)
@@ -57,7 +59,7 @@ def _income_records_from_transactions(transactions: Iterable[TransactionRecord])
     )
     for record in sorted_transactions:
         effective_date_value = effective_date(record)
-        if record.description in INCOME_DESCRIPTIONS:
+        if record.description in TRACKED_CASH_FLOW_DESCRIPTIONS:
             yield IncomeRecord(
                 account_name=record.account_name,
                 trade_date=effective_date_value,
