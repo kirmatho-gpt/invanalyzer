@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import hashlib
 from dataclasses import asdict
 from datetime import datetime
@@ -8,6 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Optional
 
+from src.ingestion.csv_utils import read_csv_dict_rows
 from src.normalization.holdings import HoldingRecord
 from src.normalization.transactions import TransactionRecord
 
@@ -132,82 +132,78 @@ def _settled_amount_to_cash_flow(
 
 
 def parse_hsbc_transactions(path: Path, account_name: str, broker: str) -> Iterable[TransactionRecord]:
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            trade_date = _parse_date(row.get("Transaction Date", ""))
-            settlement_date = trade_date
-            description = _normalize_transaction_description(
-                _normalize_text(row.get("Transaction Description", ""))
-            )
-            symbol = _normalize_text(row.get("Product Short Name", ""))
-            sedol = _normalize_text(row.get("Product Code", ""))
-            quantity = _parse_decimal(row.get("No. of Units", ""))
-            price = _parse_decimal(row.get("Deal Price", ""))
-            reference = _normalize_text(row.get("Transaction Reference", ""))
-            settled_amount = _parse_decimal(row.get("Settled Amount", ""))
-            debit, credit = _settled_amount_to_cash_flow(description, settled_amount)
-            currency = _normalize_text(row.get("Settlement Currency", "")) or _normalize_text(
-                row.get("Price Currency", "")
-            )
+    for row in read_csv_dict_rows(path):
+        trade_date = _parse_date(row.get("Transaction Date", ""))
+        settlement_date = trade_date
+        description = _normalize_transaction_description(
+            _normalize_text(row.get("Transaction Description", ""))
+        )
+        symbol = _normalize_text(row.get("Product Short Name", ""))
+        sedol = _normalize_text(row.get("Product Code", ""))
+        quantity = _parse_decimal(row.get("No. of Units", ""))
+        price = _parse_decimal(row.get("Deal Price", ""))
+        reference = _normalize_text(row.get("Transaction Reference", ""))
+        settled_amount = _parse_decimal(row.get("Settled Amount", ""))
+        debit, credit = _settled_amount_to_cash_flow(description, settled_amount)
+        currency = _normalize_text(row.get("Settlement Currency", "")) or _normalize_text(
+            row.get("Price Currency", "")
+        )
 
-            record = TransactionRecord(
-                transaction_id="",
-                account_name=account_name,
-                broker=broker,
-                trade_date=trade_date,
-                settlement_date=settlement_date,
-                symbol=sedol,
-                sedol=sedol,
-                quantity=quantity,
-                price=price,
-                description=description,
-                reference=reference,
-                debit=debit,
-                credit=credit,
-                running_balance=None,
-                currency=currency,
-                source_file=path.name,
-            )
-            record = record.__class__(**{**asdict(record), "transaction_id": _transaction_id(record)})
-            yield record
+        record = TransactionRecord(
+            transaction_id="",
+            account_name=account_name,
+            broker=broker,
+            trade_date=trade_date,
+            settlement_date=settlement_date,
+            symbol=sedol,
+            sedol=sedol,
+            quantity=quantity,
+            price=price,
+            description=description,
+            reference=reference,
+            debit=debit,
+            credit=credit,
+            running_balance=None,
+            currency=currency,
+            source_file=path.name,
+        )
+        record = record.__class__(**{**asdict(record), "transaction_id": _transaction_id(record)})
+        yield record
 
 
 def parse_hsbc_holdings(path: Path, account_name: str, broker: str) -> Iterable[HoldingRecord]:
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            symbol = _normalize_text(row.get("Product Code", ""))
-            name = _normalize_text(row.get("Product Name", ""))
-            if not symbol:
-                continue
-            quantity = _parse_decimal(row.get("No. of Units", ""))
-            price = _parse_decimal(row.get("Unit Price", ""))
-            valuation_date = _parse_date(row.get("Valuation Date", ""))
-            market_value = _parse_decimal(row.get("Total Value", ""))
-            book_cost = _parse_decimal(row.get("Book Cost ", "")) or _parse_decimal(row.get("Book Cost", ""))
-            gain_loss = _parse_decimal(row.get("Gain/Loss", ""))
-            gain_loss_pct = _parse_percent(row.get("Gain/Loss % ", "")) or _parse_percent(
-                row.get("Gain/Loss %", "")
-            )
-            currency = _normalize_text(row.get("Price Currency", ""))
+    for row in read_csv_dict_rows(path):
+        symbol = _normalize_text(row.get("Product Code", ""))
+        name = _normalize_text(row.get("Product Name", ""))
+        if not symbol:
+            continue
+        quantity = _parse_decimal(row.get("No. of Units", ""))
+        price = _parse_decimal(row.get("Unit Price", ""))
+        valuation_date = _parse_date(row.get("Valuation Date", ""))
+        market_value = _parse_decimal(row.get("Total Value", ""))
+        book_cost = _parse_decimal(row.get("Book Cost ", "")) or _parse_decimal(row.get("Book Cost", ""))
+        gain_loss = _parse_decimal(row.get("Gain/Loss", ""))
+        gain_loss_pct = _parse_percent(row.get("Gain/Loss % ", "")) or _parse_percent(
+            row.get("Gain/Loss %", "")
+        )
+        currency = _normalize_text(row.get("Price Currency", ""))
 
-            record = HoldingRecord(
-                snapshot_id="",
-                account_name=account_name,
-                broker=broker,
-                valuation_date=valuation_date,
-                symbol=symbol,
-                name=name,
-                quantity=quantity,
-                price=price,
-                average_price=None,
-                market_value=market_value,
-                book_cost=book_cost,
-                gain_loss=gain_loss,
-                gain_loss_pct=gain_loss_pct,
-                currency=currency,
-                source_file=path.name,
-            )
-            record = record.__class__(**{**asdict(record), "snapshot_id": _snapshot_id(record)})
-            yield record
+        record = HoldingRecord(
+            snapshot_id="",
+            account_name=account_name,
+            broker=broker,
+            valuation_date=valuation_date,
+            symbol=symbol,
+            name=name,
+            quantity=quantity,
+            price=price,
+            average_price=None,
+            market_value=market_value,
+            book_cost=book_cost,
+            gain_loss=gain_loss,
+            gain_loss_pct=gain_loss_pct,
+            currency=currency,
+            source_file=path.name,
+        )
+        record = record.__class__(**{**asdict(record), "snapshot_id": _snapshot_id(record)})
+        yield record
