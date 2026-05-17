@@ -1,5 +1,13 @@
 Examples of commands for scripts:
 
+--- Full pipeline in one go (normalize + gap warnings + reconcile + all reports) ---
+python -m scripts.process_all \
+  --transactions-input ~/Dev/src/data/invanalyzer/transactions/ \
+  --holdings-input ~/Dev/src/data/invanalyzer/holdings/ \
+  --normalized-output ~/Dev/src/data/invanalyzer/normalized/ \
+  --reports-output ~/Dev/src/data/invanalyzer/reports/
+
+
 --- Convert transactions to normalized transactions (all accounts) ---
 python -m scripts.normalize_transactions --input ~/Dev/src/data/invanalyzer/transactions/ --output ~/Dev/src/data/invanalyzer/normalized/
 
@@ -22,3 +30,10 @@ python -m scripts.report_unrealized_gains --transactions ~/Dev/src/data/invanaly
 
 --- Generate unrealized gain reports for a group of accounts  ---
 python -m scripts.report_unrealized_gains --transactions ~/Dev/src/data/invanalyzer/normalized/ --holdings ~/Dev/src/data/invanalyzer/normalized/ --output ~/Dev/src/data/invanalyzer/reports/unrealized {--accounts trading_thiago} --combined-output ~/Dev/src/data/invanalyzer/reports/unrealized_gains_report.csv
+
+
+--- Generate historical performance reports (one file per account + one aggregated file) ---
+python -m scripts.report_historical_performance --transactions ~/Dev/src/data/invanalyzer/normalized/ --holdings ~/Dev/src/data/invanalyzer/normalized/ --output ~/Dev/src/data/invanalyzer/reports/historical_performance_report.csv {--accounts trading_thiago}
+# This creates:
+#   historical_performance_report_<account>.csv
+#   historical_performance_report_aggregated.csv

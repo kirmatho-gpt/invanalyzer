@@ -2,8 +2,9 @@
   "default_broker": "ii",
   "accounts": {
     "isa_thiago": "hsbc",
+    "isa2_thiago": "ii",
     "isa_kirill": "ii",
     "trading_thiago": "ii",
-    "traiding_kirill": "ii"
+    "trading_kirill": "ii"
   }
 }
