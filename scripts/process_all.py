@@ -17,6 +17,7 @@ from src.reporting.historical_performance_report import (
     write_historical_performance_reports,
 )
 from src.reporting.income_report import summarize_income, write_income_report
+from src.reporting.tax_report import summarize_tax_reports, write_tax_reports
 from src.reporting.unrealized_gain_report import (
     summarize_unrealized_gains,
     write_combined_unrealized_gain_report,
@@ -211,6 +212,7 @@ def run_full_pipeline(
     reports_root: Path,
     config_path: Path,
     accounts: Sequence[str] | None = None,
+    tax_report_owners: Sequence[str] | None = None,
 ) -> None:
     account_filter = {name.strip() for name in (accounts or []) if name.strip()}
     account_brokers = load_account_brokers(config_path)
@@ -277,7 +279,7 @@ def run_full_pipeline(
         reconciliation_mismatches,
     )
 
-    print("Step 5/6: Generate income and unrealized gain reports")
+    print("Step 5/7: Generate income and unrealized gain reports")
     reports_root.mkdir(parents=True, exist_ok=True)
     income_rows = summarize_income(normalized_root, accounts=accounts)
     write_income_report(income_rows, reports_root / "income_report.csv")
@@ -294,7 +296,7 @@ def run_full_pipeline(
         latest_only=True,
     )
 
-    print("Step 6/6: Generate historical performance reports")
+    print("Step 6/7: Generate historical performance reports")
     historical_rows = summarize_historical_performance(
         transactions_root=normalized_root,
         holdings_root=normalized_root,
@@ -304,6 +306,13 @@ def run_full_pipeline(
         historical_rows,
         reports_root / "historical_performance_report.csv",
     )
+
+    print("Step 7/7: Generate tax reports")
+    tax_summaries = summarize_tax_reports(
+        transactions_root=normalized_root,
+        owners=tax_report_owners or ["kirill", "thiago"],
+    )
+    write_tax_reports(tax_summaries, reports_root)
 
     print("Full processing pipeline completed.")
     print(f"Normalized data root: {normalized_root}")
@@ -361,6 +370,15 @@ def main() -> None:
             "When omitted, all configured accounts are processed."
         ),
     )
+    parser.add_argument(
+        "--tax-report-owners",
+        nargs="*",
+        default=["kirill", "thiago"],
+        help=(
+            "Owners for tax reports. "
+            "Writes one file per owner: tax_report_<owner>.csv."
+        ),
+    )
     args = parser.parse_args()
 
     run_full_pipeline(
@@ -370,6 +388,7 @@ def main() -> None:
         reports_root=args.reports_root,
         config_path=args.config_path,
         accounts=args.accounts,
+        tax_report_owners=args.tax_report_owners,
     )
 
 

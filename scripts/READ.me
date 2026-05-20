@@ -37,3 +37,11 @@ python -m scripts.report_historical_performance --transactions ~/Dev/src/data/in
 # This creates:
 #   historical_performance_report_<account>.csv
 #   historical_performance_report_aggregated.csv
+
+
+--- Generate tax reports for previous UK tax year (one per owner) ---
+python -m scripts.report_tax --transactions ~/Dev/src/data/invanalyzer/normalized/ --output ~/Dev/src/data/invanalyzer/reports/ --owners kirill thiago
+# Only trading accounts are included; ISA accounts are excluded.
+# This creates:
+#   tax_report_kirill.csv
+#   tax_report_thiago.csv
