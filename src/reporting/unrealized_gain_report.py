@@ -12,6 +12,21 @@ from src.normalization.holdings import HoldingRecord
 from src.normalization.transactions import TransactionRecord
 
 
+UNREALIZED_GAIN_FIELDNAMES = [
+    "account_name",
+    "valuation_date",
+    "symbol",
+    "name",
+    "quantity",
+    "price",
+    "book_cost",
+    "market_value",
+    "unrealized_gain",
+    "unrealized_gain_pct",
+    "currency",
+]
+
+
 @dataclass(frozen=True)
 class PositionCost:
     quantity: Decimal
@@ -132,6 +147,35 @@ def _market_value(holding: HoldingRecord) -> Decimal:
     return Decimal("0")
 
 
+def _valuation_date_from_holdings_path(path: Path) -> Optional[date]:
+    stem = path.stem
+    for token in stem.split("_"):
+        try:
+            return date.fromisoformat(token)
+        except ValueError:
+            continue
+    return None
+
+
+def collect_holdings_snapshot_dates(
+    holdings_root: Path,
+    accounts: Optional[Iterable[str]] = None,
+) -> Dict[str, set[date]]:
+    account_filter = {name.strip() for name in accounts or [] if name.strip()}
+    dates_by_account: Dict[str, set[date]] = {}
+
+    for path in sorted(holdings_root.rglob("holdings_*_normalized.csv")):
+        account_name = path.parent.name
+        if account_filter and account_name not in account_filter:
+            continue
+        valuation_date = _valuation_date_from_holdings_path(path)
+        if valuation_date is None:
+            continue
+        dates_by_account.setdefault(account_name, set()).add(valuation_date)
+
+    return dates_by_account
+
+
 def summarize_unrealized_gains(
     transactions_root: Path,
     holdings_root: Path,
@@ -146,8 +190,13 @@ def summarize_unrealized_gains(
             continue
         transactions_by_account[account_name] = list(read_normalized_transactions(path))
 
-    holdings_by_account: Dict[str, list[HoldingRecord]] = {}
-    valuation_dates_by_account: Dict[str, set[date]] = {}
+    valuation_dates_by_account: Dict[str, set[date]] = collect_holdings_snapshot_dates(
+        holdings_root,
+        account_filter,
+    )
+    holdings_by_account: Dict[str, list[HoldingRecord]] = {
+        account_name: [] for account_name in valuation_dates_by_account.keys()
+    }
 
     for path in sorted(holdings_root.rglob("holdings_*_normalized.csv")):
         for holding in read_normalized_holdings(path):
@@ -183,7 +232,11 @@ def summarize_unrealized_gains(
                     market_value=round(market_value, 2),
                     book_cost=round(book_cost, 2),
                     unrealized_gain=round(unrealized_gain, 2),
-                    unrealized_gain_pct=round(unrealized_gain_pct, 4),
+                    unrealized_gain_pct=(
+                        round(unrealized_gain_pct, 4)
+                        if unrealized_gain_pct is not None
+                        else None
+                    ),
                     currency=holding.currency,
                 )
             )
@@ -192,12 +245,20 @@ def summarize_unrealized_gains(
     return rows
 
 
-def write_unrealized_gain_reports(rows: Iterable[UnrealizedGainRow], output_root: Path) -> None:
+def write_unrealized_gain_reports(
+    rows: Iterable[UnrealizedGainRow],
+    output_root: Path,
+    *,
+    snapshot_dates_by_account: Optional[Dict[str, set[date]]] = None,
+) -> None:
     grouped: Dict[tuple[str, date], list[UnrealizedGainRow]] = {}
     for row in rows:
         grouped.setdefault((row.account_name, row.valuation_date), []).append(row)
+    for account_name, snapshot_dates in (snapshot_dates_by_account or {}).items():
+        for snapshot_date in snapshot_dates:
+            grouped.setdefault((account_name, snapshot_date), [])
 
-    for (account_name, valuation_date), grouped_rows in grouped.items():
+    for (account_name, valuation_date), grouped_rows in sorted(grouped.items()):
         output_path = (
             output_root
             / account_name
@@ -205,18 +266,25 @@ def write_unrealized_gain_reports(rows: Iterable[UnrealizedGainRow], output_root
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with output_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=list(grouped_rows[0].to_dict().keys()))
+            fieldnames = list(grouped_rows[0].to_dict().keys()) if grouped_rows else UNREALIZED_GAIN_FIELDNAMES
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             for row in grouped_rows:
                 writer.writerow(row.to_dict())
 
 
-def _latest_rows_by_account(rows: Iterable[UnrealizedGainRow]) -> list[UnrealizedGainRow]:
+def _latest_rows_by_account(
+    rows: Iterable[UnrealizedGainRow],
+    snapshot_dates_by_account: Optional[Dict[str, set[date]]] = None,
+) -> list[UnrealizedGainRow]:
     rows_list = list(rows)
     latest_by_account: Dict[str, date] = {}
+    for account_name, snapshot_dates in (snapshot_dates_by_account or {}).items():
+        if snapshot_dates:
+            latest_by_account[account_name] = max(snapshot_dates)
     for row in rows_list:
         current = latest_by_account.get(row.account_name)
-        if current is None or row.valuation_date > current:
+        if current is None:
             latest_by_account[row.account_name] = row.valuation_date
     latest_rows = [
         row for row in rows_list if row.valuation_date == latest_by_account.get(row.account_name)
@@ -230,13 +298,17 @@ def write_combined_unrealized_gain_report(
     output_path: Path,
     *,
     latest_only: bool = True,
+    snapshot_dates_by_account: Optional[Dict[str, set[date]]] = None,
 ) -> None:
-    rows_list = _latest_rows_by_account(rows) if latest_only else list(rows)
-    if not rows_list:
-        return
+    rows_list = (
+        _latest_rows_by_account(rows, snapshot_dates_by_account)
+        if latest_only
+        else list(rows)
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows_list[0].to_dict().keys()))
+        fieldnames = list(rows_list[0].to_dict().keys()) if rows_list else UNREALIZED_GAIN_FIELDNAMES
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows_list:
             writer.writerow(row.to_dict())

@@ -1,3 +1,19 @@
-from .reconcile import PositionMismatch, build_positions, reconcile_positions
+from .reconcile import (
+    PendingSettlementDifference,
+    PendingSettlementTransaction,
+    PositionMismatch,
+    ReconciliationResult,
+    build_positions,
+    reconcile_positions,
+    reconcile_positions_detailed,
+)
 
-__all__ = ["PositionMismatch", "build_positions", "reconcile_positions"]
+__all__ = [
+    "PendingSettlementDifference",
+    "PendingSettlementTransaction",
+    "PositionMismatch",
+    "ReconciliationResult",
+    "build_positions",
+    "reconcile_positions",
+    "reconcile_positions_detailed",
+]

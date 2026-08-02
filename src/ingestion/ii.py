@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Optional
 
-from src.ingestion.csv_utils import read_csv_dict_rows
+from src.ingestion.csv_utils import read_dict_rows
 from src.normalization.holdings import HoldingRecord
 from src.normalization.transactions import TransactionRecord
 
@@ -72,15 +72,30 @@ def _normalize_transaction_description(description: Optional[str]) -> Optional[s
         return "subscription"
     if normalized == "debit card payment":
         return "debit card payment"
-    if normalized == "total monthly fee" or normalized.startswith("cash"):
+    if normalized in {"total monthly fee", "fee transfer"} or normalized.startswith("cash"):
         return "fees"
     if normalized == "recommend ii" or normalized.startswith("cash"):
         return "cash advantage"
     if normalized.startswith("div ") or normalized.startswith("dividend "):
         return "dividend"
-    if " del " in normalized or " bal " in normalized or "artemis f" in normalized:
-        return "buy/sell" 
+    if (
+        " del " in normalized
+        or " bal " in normalized
+        or " s date " in normalized
+        or "artemis f" in normalized
+    ):
+        return "buy/sell"
     raise ValueError(f"Unexpected transaction description: {description}")
+
+
+def _is_total_holding_row(row: dict[str, Optional[str]]) -> bool:
+    symbol = (row.get("Symbol") or "").strip().casefold()
+    name = (row.get("Name") or "").strip().casefold()
+    if symbol in {"total", "totals"} or name in {"total", "totals"}:
+        return True
+    if symbol == "gbp" and not (row.get("Qty") or "").strip() and not (row.get("Price") or "").strip():
+        return True
+    return False
 
 
 def _transaction_id(record: TransactionRecord) -> str:
@@ -127,7 +142,7 @@ def _snapshot_id(record: HoldingRecord) -> str:
 
 
 def parse_ii_transactions(path: Path, account_name: str, broker: str) -> Iterable[TransactionRecord]:
-    for row in read_csv_dict_rows(path):
+    for row in read_dict_rows(path):
         trade_date = _parse_date(row.get("Date", ""))
         settlement_date = _parse_date(row.get("Settlement Date", ""))
         symbol = _normalize_text(row.get("Symbol", ""))
@@ -174,7 +189,9 @@ def parse_ii_holdings(
     broker: str,
     valuation_date: datetime.date,
 ) -> Iterable[HoldingRecord]:
-    for row in read_csv_dict_rows(path):
+    for row in read_dict_rows(path):
+        if _is_total_holding_row(row):
+            continue
         symbol = _normalize_text(row.get("Symbol", ""))
         name = _normalize_text(row.get("Name", ""))
         if not symbol:

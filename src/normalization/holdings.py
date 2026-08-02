@@ -6,6 +6,25 @@ from decimal import Decimal
 from typing import Dict, Optional
 
 
+HOLDING_FIELDNAMES = [
+    "snapshot_id",
+    "account_name",
+    "broker",
+    "valuation_date",
+    "symbol",
+    "name",
+    "quantity",
+    "price",
+    "average_price",
+    "market_value",
+    "book_cost",
+    "gain_loss",
+    "gain_loss_pct",
+    "currency",
+    "source_file",
+]
+
+
 @dataclass(frozen=True)
 class HoldingRecord:
     snapshot_id: str

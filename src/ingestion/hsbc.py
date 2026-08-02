@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable, Optional
 
-from src.ingestion.csv_utils import read_csv_dict_rows
+from src.ingestion.csv_utils import read_dict_rows
 from src.normalization.holdings import HoldingRecord
 from src.normalization.transactions import TransactionRecord
 
@@ -132,7 +132,7 @@ def _settled_amount_to_cash_flow(
 
 
 def parse_hsbc_transactions(path: Path, account_name: str, broker: str) -> Iterable[TransactionRecord]:
-    for row in read_csv_dict_rows(path):
+    for row in read_dict_rows(path):
         trade_date = _parse_date(row.get("Transaction Date", ""))
         settlement_date = trade_date
         description = _normalize_transaction_description(
@@ -172,7 +172,7 @@ def parse_hsbc_transactions(path: Path, account_name: str, broker: str) -> Itera
 
 
 def parse_hsbc_holdings(path: Path, account_name: str, broker: str) -> Iterable[HoldingRecord]:
-    for row in read_csv_dict_rows(path):
+    for row in read_dict_rows(path):
         symbol = _normalize_text(row.get("Product Code", ""))
         name = _normalize_text(row.get("Product Name", ""))
         if not symbol:

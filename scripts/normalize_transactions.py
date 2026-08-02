@@ -14,15 +14,12 @@ from typing import Dict, Iterable, List
 from src.config import load_account_brokers
 from src.ingestion.ii import parse_ii_transactions
 from src.ingestion.hsbc import parse_hsbc_transactions
+from src.ingestion.raw_files import find_preferred_raw_files
 from src.normalization.transactions import TransactionRecord
 
 
 def _find_transaction_files(root: Path) -> List[Path]:
-    patterns = ["transactions_*_*.csv", "transactions_*_*.txt"]
-    files = []
-    for pattern in patterns:
-        files.extend(root.glob(pattern)) 
-    return sorted(files)
+    return find_preferred_raw_files(root, "transactions")
 
 
 def _extract_account_name(path: Path) -> str:

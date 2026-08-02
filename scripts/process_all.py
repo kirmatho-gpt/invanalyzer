@@ -12,6 +12,7 @@ from typing import Dict, Iterable, Sequence
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import load_account_brokers
+from src.ingestion.normalized import read_normalized_holdings
 from src.reporting.historical_performance_report import (
     summarize_historical_performance,
     write_historical_performance_reports,
@@ -19,18 +20,24 @@ from src.reporting.historical_performance_report import (
 from src.reporting.income_report import summarize_income, write_income_report
 from src.reporting.tax_report import summarize_tax_reports, write_tax_reports
 from src.reporting.unrealized_gain_report import (
+    collect_holdings_snapshot_dates,
     summarize_unrealized_gains,
     write_combined_unrealized_gain_report,
     write_unrealized_gain_reports,
 )
 
 from scripts.normalize_holdings import (
-    _extract_account_name,
+    _extract_account_name as _extract_holding_account_name,
+    _extract_date_from_stem,
     _find_holding_files,
+    _write_holdings,
     normalize_holdings,
 )
-from scripts.normalize_transactions import normalize_transactions
-from scripts.reconcile_positions import reconcile_root
+from scripts.normalize_transactions import (
+    _find_transaction_files,
+    normalize_transactions,
+)
+from scripts.reconcile_positions import reconcile_root_detailed
 
 
 def _extract_valuation_date_from_holdings_filename(path: Path) -> date:
@@ -65,11 +72,90 @@ def _collect_raw_holdings_dates_by_account(
 ) -> dict[str, set[date]]:
     dates_by_account: dict[str, set[date]] = defaultdict(set)
     for path in _find_holding_files(holdings_root):
-        account_name, valuation_date = _extract_account_name(path)
+        account_name, valuation_date = _extract_holding_account_name(path)
         if accounts and account_name not in accounts:
             continue
         dates_by_account[account_name].add(valuation_date)
     return dict(dates_by_account)
+
+
+def _extract_transaction_account_and_date(path: Path) -> tuple[str, date]:
+    stem = path.stem
+    if not stem.startswith("transactions_"):
+        raise ValueError(f"Unexpected transaction filename: {path.name}")
+    transaction_date, date_token = _extract_date_from_stem(stem)
+    account_part = stem[len("transactions_") :]
+    account_name = account_part.replace(date_token, "").strip("_")
+    if not account_name:
+        raise ValueError(f"Unable to determine account name from filename: {path.name}")
+    return account_name, transaction_date
+
+
+def _collect_raw_transaction_dates_by_account(
+    transactions_root: Path,
+    *,
+    accounts: set[str] | None = None,
+) -> dict[str, set[date]]:
+    dates_by_account: dict[str, set[date]] = defaultdict(set)
+    for path in _find_transaction_files(transactions_root):
+        account_name, transaction_date = _extract_transaction_account_and_date(path)
+        if accounts and account_name not in accounts:
+            continue
+        dates_by_account[account_name].add(transaction_date)
+    return dict(dates_by_account)
+
+
+def _potentially_missing_raw_file_warnings(
+    transaction_dates_by_account: dict[str, set[date]],
+    holdings_dates_by_account: dict[str, set[date]],
+) -> list[str]:
+    warnings: list[str] = []
+    accounts = sorted(
+        set(transaction_dates_by_account.keys()) | set(holdings_dates_by_account.keys())
+    )
+
+    for account_name in accounts:
+        transaction_dates = transaction_dates_by_account.get(account_name, set())
+        holdings_dates = holdings_dates_by_account.get(account_name, set())
+        for snapshot_date in sorted(transaction_dates - holdings_dates):
+            warnings.append(
+                (
+                    f"Potentially missing holdings file for account '{account_name}' "
+                    f"on {snapshot_date.isoformat()}: transactions file is present, "
+                    "but no holdings file was found. Treating the portfolio snapshot as empty."
+                )
+            )
+        for transaction_date in sorted(holdings_dates - transaction_dates):
+            warnings.append(
+                (
+                    f"Potentially missing transactions file for account '{account_name}' "
+                    f"on {transaction_date.isoformat()}: holdings file is present, "
+                    "but no transactions file was found. Treating this as no new transactions."
+                )
+            )
+
+    return warnings
+
+
+def _write_empty_holdings_snapshots_for_missing_raw_holdings(
+    normalized_root: Path,
+    transaction_dates_by_account: dict[str, set[date]],
+    holdings_dates_by_account: dict[str, set[date]],
+) -> list[tuple[str, date]]:
+    created: list[tuple[str, date]] = []
+    for account_name, transaction_dates in sorted(transaction_dates_by_account.items()):
+        missing_holdings_dates = sorted(
+            transaction_dates - holdings_dates_by_account.get(account_name, set())
+        )
+        for snapshot_date in missing_holdings_dates:
+            output_path = (
+                normalized_root
+                / account_name
+                / f"holdings_{snapshot_date.isoformat()}_normalized.csv"
+            )
+            _write_holdings([], output_path)
+            created.append((account_name, snapshot_date))
+    return created
 
 
 def _merge_dates_by_account(
@@ -179,6 +265,38 @@ def _missing_holdings_snapshot_warnings(
     return warnings
 
 
+def _holdings_valuation_date_mismatch_warnings(
+    normalized_root: Path,
+    *,
+    accounts: set[str] | None = None,
+) -> list[str]:
+    warnings: list[str] = []
+    for path in sorted(normalized_root.rglob("holdings_*_normalized.csv")):
+        account_name = path.parent.name
+        if accounts and account_name not in accounts:
+            continue
+
+        filename_date = _extract_valuation_date_from_holdings_filename(path)
+        row_dates = {
+            holding.valuation_date
+            for holding in read_normalized_holdings(path)
+            if holding.valuation_date != filename_date
+        }
+        if not row_dates:
+            continue
+
+        warnings.append(
+            (
+                f"Holdings valuation date mismatch for account '{account_name}': "
+                f"{path.name} is dated {filename_date.isoformat()} by filename "
+                f"but contains row valuation_date values "
+                f"{', '.join(snapshot_date.isoformat() for snapshot_date in sorted(row_dates))}. "
+                "Please check the raw holdings file name against the broker valuation date."
+            )
+        )
+    return warnings
+
+
 def _print_warning_block(title: str, warnings: list[str]) -> None:
     if not warnings:
         return
@@ -231,12 +349,21 @@ def run_full_pipeline(
     normalize_holdings(holdings_input_root, normalized_root, config_path)
 
     print("Step 3/6: Validate snapshot coverage and log gaps")
-    normalized_holdings_dates_by_account = _collect_holdings_dates_by_account(
-        normalized_root,
+    raw_transaction_dates_by_account = _collect_raw_transaction_dates_by_account(
+        transactions_input_root,
         accounts=account_filter or None,
     )
     raw_holdings_dates_by_account = _collect_raw_holdings_dates_by_account(
         holdings_input_root,
+        accounts=account_filter or None,
+    )
+    _write_empty_holdings_snapshots_for_missing_raw_holdings(
+        normalized_root,
+        raw_transaction_dates_by_account,
+        raw_holdings_dates_by_account,
+    )
+    normalized_holdings_dates_by_account = _collect_holdings_dates_by_account(
+        normalized_root,
         accounts=account_filter or None,
     )
     holdings_dates_by_account = _merge_dates_by_account(
@@ -245,6 +372,13 @@ def run_full_pipeline(
     )
     for account_name in expected_accounts:
         holdings_dates_by_account.setdefault(account_name, set())
+    _print_warning_block(
+        "Potentially missing raw files",
+        _potentially_missing_raw_file_warnings(
+            raw_transaction_dates_by_account,
+            raw_holdings_dates_by_account,
+        ),
+    )
     _print_warning_block(
         "Missing normalized transactions",
         _missing_transaction_file_warnings(normalized_root, expected_accounts),
@@ -264,16 +398,32 @@ def run_full_pipeline(
             _ii_accounts_from_config(account_brokers, account_filter),
         ),
     )
+    _print_warning_block(
+        "Holdings valuation date mismatches",
+        _holdings_valuation_date_mismatch_warnings(
+            normalized_root,
+            accounts=account_filter or None,
+        ),
+    )
 
     print("Step 4/6: Reconcile holdings positions against transactions")
     reconcile_roots = [normalized_root]
     if account_filter:
         reconcile_roots = [normalized_root / account_name for account_name in sorted(account_filter)]
     reconciliation_mismatches: list[str] = []
+    pending_settlement_differences: list[str] = []
     for root in reconcile_roots:
         if not root.exists():
             continue
-        reconciliation_mismatches.extend(reconcile_root(root))
+        reconciliation_result = reconcile_root_detailed(root)
+        reconciliation_mismatches.extend(reconciliation_result.mismatches)
+        pending_settlement_differences.extend(
+            reconciliation_result.pending_settlements
+        )
+    _print_warning_block(
+        "Pending settlement reconciliation differences",
+        pending_settlement_differences,
+    )
     _print_warning_block(
         "Position reconciliation mismatches",
         reconciliation_mismatches,
@@ -289,11 +439,20 @@ def run_full_pipeline(
         holdings_root=normalized_root,
         accounts=accounts,
     )
-    write_unrealized_gain_reports(unrealized_rows, reports_root / "unrealized")
+    snapshot_dates_by_account = collect_holdings_snapshot_dates(
+        normalized_root,
+        accounts=accounts,
+    )
+    write_unrealized_gain_reports(
+        unrealized_rows,
+        reports_root / "unrealized",
+        snapshot_dates_by_account=snapshot_dates_by_account,
+    )
     write_combined_unrealized_gain_report(
         unrealized_rows,
         reports_root / "unrealized_gains_report.csv",
         latest_only=True,
+        snapshot_dates_by_account=snapshot_dates_by_account,
     )
 
     print("Step 6/7: Generate historical performance reports")

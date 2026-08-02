@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.reporting.unrealized_gain_report import (
+    collect_holdings_snapshot_dates,
     summarize_unrealized_gains,
     write_combined_unrealized_gain_report,
     write_unrealized_gain_reports,
@@ -77,12 +78,21 @@ def main() -> None:
         args.holdings_root,
         accounts=args.accounts,
     )
-    write_unrealized_gain_reports(rows, args.output_root)
+    snapshot_dates_by_account = collect_holdings_snapshot_dates(
+        args.holdings_root,
+        accounts=args.accounts,
+    )
+    write_unrealized_gain_reports(
+        rows,
+        args.output_root,
+        snapshot_dates_by_account=snapshot_dates_by_account,
+    )
     if args.combined_output:
         write_combined_unrealized_gain_report(
             rows,
             args.combined_output,
             latest_only=not args.combined_all_dates,
+            snapshot_dates_by_account=snapshot_dates_by_account,
         )
 
 

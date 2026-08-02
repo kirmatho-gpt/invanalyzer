@@ -15,7 +15,10 @@ from src.positions.transaction_utils import (
     apply_transaction_to_position_costs,
     effective_date,
 )
-from src.reporting.unrealized_gain_report import summarize_unrealized_gains
+from src.reporting.unrealized_gain_report import (
+    collect_holdings_snapshot_dates,
+    summarize_unrealized_gains,
+)
 
 
 DISTRIBUTED_CASHFLOW_DESCRIPTIONS = {"dividend", "account interest", "cash advantage"}
@@ -158,6 +161,11 @@ def summarize_historical_performance(
     unrealized_totals: Dict[tuple[str, date], Decimal] = defaultdict(lambda: Decimal("0"))
     nominal_invested_totals: Dict[tuple[str, date], Decimal] = defaultdict(lambda: Decimal("0"))
     valuation_dates_by_account: Dict[str, set[date]] = defaultdict(set)
+    for account_name, snapshot_dates in collect_holdings_snapshot_dates(
+        holdings_root,
+        accounts,
+    ).items():
+        valuation_dates_by_account[account_name].update(snapshot_dates)
     for row in unrealized_rows:
         key = (row.account_name, row.valuation_date)
         unrealized_totals[key] += row.unrealized_gain

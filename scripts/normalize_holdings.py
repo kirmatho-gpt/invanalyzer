@@ -15,7 +15,8 @@ from typing import Dict, Iterable, List, Tuple
 from src.config import load_account_brokers
 from src.ingestion.ii import parse_ii_holdings
 from src.ingestion.hsbc import parse_hsbc_holdings
-from src.normalization.holdings import HoldingRecord
+from src.ingestion.raw_files import find_preferred_raw_files
+from src.normalization.holdings import HOLDING_FIELDNAMES, HoldingRecord
 
 
 DATE_PATTERNS = (
@@ -26,11 +27,7 @@ DATE_PATTERNS = (
 
 
 def _find_holding_files(root: Path) -> List[Path]:
-    patterns = ["holdings_*_*.csv", "holdings_*_*.txt"]
-    files = []
-    for pattern in patterns:
-        files.extend(root.glob(pattern)) 
-    return sorted(files)
+    return find_preferred_raw_files(root, "holdings")
 
 
 def _extract_date_from_stem(stem: str) -> Tuple[datetime.date, str]:
@@ -83,11 +80,10 @@ def _parse_holdings(
 def _write_holdings(records: Iterable[HoldingRecord], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     records_list = list(records)
-    if not records_list:
-        return
     records_list.sort(key=lambda r: (r.symbol or "", r.name or ""))
     with output_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(records_list[0].to_dict().keys()))
+        fieldnames = list(records_list[0].to_dict().keys()) if records_list else HOLDING_FIELDNAMES
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for record in records_list:
             writer.writerow(record.to_dict())
@@ -102,6 +98,7 @@ def normalize_holdings(raw_root: Path, output_root: Path, config_path: Path) -> 
         account_name, valuation_date = _extract_account_name(path)
         broker = _broker_for_account(account_name, account_brokers)
         print(f"Processing {path.name} for account '{account_name}' with broker '{broker}' and valuation date {valuation_date}")
+        grouped.setdefault((account_name, valuation_date), [])
         for record in _parse_holdings(
             path,
             broker=broker,

@@ -59,7 +59,7 @@ def build_positions(
 ) -> Dict[str, Decimal]:
     positions: Dict[str, Decimal] = {}
     for record in transactions:
-        effective = record.trade_date or record.settlement_date
+        effective = record.settlement_date or record.trade_date
         if not effective or effective > valuation_date:
             continue
         if not record.symbol:
