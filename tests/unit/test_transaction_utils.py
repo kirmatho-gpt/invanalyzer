@@ -123,6 +123,29 @@ def test_build_positions_filters_and_sums() -> None:
     }
 
 
+def test_build_positions_uses_settlement_date_before_trade_date() -> None:
+    valuation_date = date(2024, 1, 10)
+    records = [
+        make_record(
+            trade_date=date(2024, 1, 8),
+            settlement_date=date(2024, 1, 12),
+            quantity=Decimal("10"),
+            description="buy",
+        ),
+        make_record(
+            trade_date=date(2024, 1, 8),
+            settlement_date=date(2024, 1, 10),
+            symbol="MSFT",
+            quantity=Decimal("4"),
+            description="buy",
+        ),
+    ]
+
+    positions = build_positions(records, valuation_date)
+
+    assert positions == {"MSFT": Decimal("4")}
+
+
 def test_apply_transaction_to_position_costs_buy_updates_position() -> None:
     positions: dict[str, PositionCost] = {}
     record = make_record(
