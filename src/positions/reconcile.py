@@ -10,6 +10,9 @@ from typing import Dict, Iterable, Optional
 from src.positions.transaction_utils import build_positions, infer_signed_quantity_from_fields
 
 
+IMMATERIAL_POSITION_DELTA = Decimal("1")
+
+
 @dataclass(frozen=True)
 class TransactionRow:
     account_name: str
@@ -178,7 +181,7 @@ def reconcile_positions_detailed(
         holdings_qty = holdings.get(symbol, Decimal("0"))
         transaction_qty = positions.get(symbol, Decimal("0"))
         delta = holdings_qty - transaction_qty
-        if delta != 0:
+        if delta != 0 and abs(delta) >= IMMATERIAL_POSITION_DELTA:
             mismatch = PositionMismatch(
                 account_name=account_name,
                 valuation_date=valuation_date,

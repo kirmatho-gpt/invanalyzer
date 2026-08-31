@@ -79,3 +79,46 @@ def test_reconcile_root_keeps_unexplained_delta_as_mismatch(tmp_path: Path) -> N
     assert "account=acct" in result.mismatches[0]
     assert "symbol=AAA" in result.mismatches[0]
     assert "delta=-2" in result.mismatches[0]
+
+
+def test_reconcile_root_ignores_immaterial_sub_one_delta(tmp_path: Path) -> None:
+    account_root = tmp_path / "acct"
+    account_root.mkdir(parents=True)
+    _write_transactions(
+        account_root,
+        [
+            "acct,2026-01-01,2026-01-03,AAA,10,buy,,\n",
+            "acct,2026-01-01,2026-01-03,BBB,10,buy,,\n",
+        ],
+    )
+    _write_holdings(
+        account_root,
+        "2026-01-05",
+        [
+            "AAA,10.99\n",
+            "BBB,9.01\n",
+        ],
+    )
+
+    result = reconcile_root_detailed(tmp_path)
+
+    assert result.pending_settlements == []
+    assert result.mismatches == []
+
+
+def test_reconcile_root_reports_one_unit_delta(tmp_path: Path) -> None:
+    account_root = tmp_path / "acct"
+    account_root.mkdir(parents=True)
+    _write_transactions(
+        account_root,
+        [
+            "acct,2026-01-01,2026-01-03,AAA,10,buy,,\n",
+        ],
+    )
+    _write_holdings(account_root, "2026-01-05", ["AAA,11\n"])
+
+    result = reconcile_root_detailed(tmp_path)
+
+    assert result.pending_settlements == []
+    assert len(result.mismatches) == 1
+    assert "delta=1" in result.mismatches[0]
