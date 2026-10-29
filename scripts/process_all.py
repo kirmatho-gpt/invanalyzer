@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, Sequence
 
@@ -48,6 +48,17 @@ def _extract_valuation_date_from_holdings_filename(path: Path) -> date:
         except ValueError:
             continue
     raise ValueError(f"Unable to find valuation date in holdings filename: {path.name}")
+
+
+def _is_expected_weekend_broker_valuation_date(
+    filename_date: date,
+    row_date: date,
+) -> bool:
+    if filename_date.weekday() not in (5, 6):
+        return False
+
+    previous_friday = filename_date - timedelta(days=filename_date.weekday() - 4)
+    return row_date == previous_friday
 
 
 def _collect_holdings_dates_by_account(
@@ -281,6 +292,10 @@ def _holdings_valuation_date_mismatch_warnings(
             holding.valuation_date
             for holding in read_normalized_holdings(path)
             if holding.valuation_date != filename_date
+            and not _is_expected_weekend_broker_valuation_date(
+                filename_date,
+                holding.valuation_date,
+            )
         }
         if not row_dates:
             continue

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -157,6 +157,22 @@ def _valuation_date_from_holdings_path(path: Path) -> Optional[date]:
     return None
 
 
+def _selected_holdings_snapshot_paths(
+    holdings_root: Path,
+    account_filter: set[str],
+) -> Dict[tuple[str, date], Path]:
+    selected: Dict[tuple[str, date], Path] = {}
+    for path in sorted(holdings_root.rglob("holdings_*_normalized.csv")):
+        account_name = path.parent.name
+        if account_filter and account_name not in account_filter:
+            continue
+        snapshot_date = _valuation_date_from_holdings_path(path)
+        if snapshot_date is None:
+            continue
+        selected[(account_name, snapshot_date)] = path
+    return selected
+
+
 def collect_holdings_snapshot_dates(
     holdings_root: Path,
     accounts: Optional[Iterable[str]] = None,
@@ -164,13 +180,10 @@ def collect_holdings_snapshot_dates(
     account_filter = {name.strip() for name in accounts or [] if name.strip()}
     dates_by_account: Dict[str, set[date]] = {}
 
-    for path in sorted(holdings_root.rglob("holdings_*_normalized.csv")):
-        account_name = path.parent.name
-        if account_filter and account_name not in account_filter:
-            continue
-        valuation_date = _valuation_date_from_holdings_path(path)
-        if valuation_date is None:
-            continue
+    for account_name, valuation_date in _selected_holdings_snapshot_paths(
+        holdings_root,
+        account_filter,
+    ).keys():
         dates_by_account.setdefault(account_name, set()).add(valuation_date)
 
     return dates_by_account
@@ -190,19 +203,24 @@ def summarize_unrealized_gains(
             continue
         transactions_by_account[account_name] = list(read_normalized_transactions(path))
 
-    valuation_dates_by_account: Dict[str, set[date]] = collect_holdings_snapshot_dates(
+    selected_holdings_paths = _selected_holdings_snapshot_paths(
         holdings_root,
         account_filter,
     )
+    valuation_dates_by_account: Dict[str, set[date]] = {}
+    for account_name, snapshot_date in selected_holdings_paths.keys():
+        valuation_dates_by_account.setdefault(account_name, set()).add(snapshot_date)
     holdings_by_account: Dict[str, list[HoldingRecord]] = {
         account_name: [] for account_name in valuation_dates_by_account.keys()
     }
 
-    for path in sorted(holdings_root.rglob("holdings_*_normalized.csv")):
+    for (path_account_name, snapshot_date), path in sorted(selected_holdings_paths.items()):
         for holding in read_normalized_holdings(path):
-            account_name = holding.account_name or path.parent.name
+            account_name = holding.account_name or path_account_name
             if account_filter and account_name not in account_filter:
                 continue
+            # The filename is the report snapshot date, including on weekends.
+            holding = replace(holding, valuation_date=snapshot_date)
             holdings_by_account.setdefault(account_name, []).append(holding)
             valuation_dates_by_account.setdefault(account_name, set()).add(holding.valuation_date)
 
@@ -272,6 +290,20 @@ def write_unrealized_gain_reports(
             for row in grouped_rows:
                 writer.writerow(row.to_dict())
 
+    # The supplied snapshot inventory is authoritative only for these accounts.
+    # Remove obsolete generated reports after successfully writing replacements.
+    for account_name in snapshot_dates_by_account or {}:
+        for path in (output_root / account_name).glob("unrealized_gains_*.csv"):
+            date_token = path.stem.removeprefix("unrealized_gains_")
+            try:
+                report_date = date.fromisoformat(date_token)
+            except ValueError:
+                continue
+            if date_token != report_date.isoformat():
+                continue
+            if (account_name, report_date) not in grouped:
+                path.unlink()
+
 
 def _latest_rows_by_account(
     rows: Iterable[UnrealizedGainRow],
@@ -284,7 +316,7 @@ def _latest_rows_by_account(
             latest_by_account[account_name] = max(snapshot_dates)
     for row in rows_list:
         current = latest_by_account.get(row.account_name)
-        if current is None:
+        if current is None or row.valuation_date > current:
             latest_by_account[row.account_name] = row.valuation_date
     latest_rows = [
         row for row in rows_list if row.valuation_date == latest_by_account.get(row.account_name)

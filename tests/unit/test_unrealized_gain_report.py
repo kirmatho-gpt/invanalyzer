@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import csv
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+
+import pytest
 
 from scripts.normalize_holdings import normalize_holdings
 from src.normalization.holdings import HOLDING_FIELDNAMES
@@ -101,6 +104,167 @@ def test_summarize_unrealized_gains_handles_missing_cost_basis(tmp_path: Path) -
     assert rows[0].book_cost == Decimal("0.00")
     assert rows[0].unrealized_gain == Decimal("3947.80")
     assert rows[0].unrealized_gain_pct is None
+
+
+def test_weekend_snapshots_keep_separate_filename_dates(tmp_path: Path) -> None:
+    account_root = tmp_path / "isa_kirill"
+    account_root.mkdir(parents=True, exist_ok=True)
+    (account_root / "holdings_2026-09-25_normalized.csv").write_text(
+        HOLDINGS_HEADER
+        + "h1,isa_kirill,ii,2026-09-25,AAA,Fund,1,110,,110,,,,GBP,holdings.pdf\n",
+        encoding="utf-8",
+    )
+    (account_root / "holdings_2026-09-27_normalized.csv").write_text(
+        HOLDINGS_HEADER
+        + "h1,isa_kirill,ii,2026-09-25,AAA,Fund,1,125,,125,,,,GBP,holdings.pdf\n"
+        + "h2,isa_kirill,ii,,BBB,Fund,1,50,,50,,,,GBP,holdings.pdf\n",
+        encoding="utf-8",
+    )
+
+    snapshot_dates = collect_holdings_snapshot_dates(tmp_path)
+    rows = summarize_unrealized_gains(tmp_path, tmp_path)
+    output_root = tmp_path / "reports" / "unrealized"
+
+    write_unrealized_gain_reports(
+        rows,
+        output_root,
+        snapshot_dates_by_account=snapshot_dates,
+    )
+
+    assert snapshot_dates == {"isa_kirill": {date(2026, 9, 25), date(2026, 9, 27)}}
+    assert [row.valuation_date for row in rows] == [
+        date(2026, 9, 25),
+        date(2026, 9, 27),
+        date(2026, 9, 27),
+    ]
+    assert [row.market_value for row in rows] == [
+        Decimal("110.00"), Decimal("125.00"), Decimal("50.00"),
+    ]
+    assert (output_root / "isa_kirill" / "unrealized_gains_2026-09-25.csv").exists()
+    assert (output_root / "isa_kirill" / "unrealized_gains_2026-09-27.csv").exists()
+
+    # Latest selection must also work when callers omit the snapshot inventory.
+    combined_path = tmp_path / "combined.csv"
+    write_combined_unrealized_gain_report(rows, combined_path)
+    with combined_path.open(encoding="utf-8", newline="") as handle:
+        combined_rows = list(csv.DictReader(handle))
+    assert len(combined_rows) == 2
+    assert {row["valuation_date"] for row in combined_rows} == {"2026-09-27"}
+
+
+def test_weekend_snapshot_date_is_not_overridden_when_row_date_is_not_previous_friday(
+    tmp_path: Path,
+) -> None:
+    account_root = tmp_path / "isa_kirill"
+    account_root.mkdir(parents=True, exist_ok=True)
+    (account_root / "holdings_2026-09-27_normalized.csv").write_text(
+        HOLDINGS_HEADER
+        + "h1,isa_kirill,ii,2026-09-24,AAA,Fund,1,125,,125,,,,GBP,holdings.pdf\n",
+        encoding="utf-8",
+    )
+
+    snapshot_dates = collect_holdings_snapshot_dates(tmp_path)
+
+    assert snapshot_dates == {"isa_kirill": {date(2026, 9, 27)}}
+
+
+def test_header_only_weekend_snapshot_keeps_filename_report_date(tmp_path: Path) -> None:
+    account_root = tmp_path / "isa_kirill"
+    account_root.mkdir(parents=True, exist_ok=True)
+    (account_root / "holdings_2026-09-25_normalized.csv").write_text(
+        HOLDINGS_HEADER
+        + "h1,isa_kirill,ii,2026-09-25,AAA,Fund,1,125,,125,,,,GBP,holdings.pdf\n",
+        encoding="utf-8",
+    )
+    (account_root / "holdings_2026-09-27_normalized.csv").write_text(
+        HOLDINGS_HEADER,
+        encoding="utf-8",
+    )
+
+    snapshot_dates = collect_holdings_snapshot_dates(tmp_path)
+    rows = summarize_unrealized_gains(tmp_path, tmp_path)
+
+    assert snapshot_dates == {"isa_kirill": {date(2026, 9, 25), date(2026, 9, 27)}}
+    assert [row.valuation_date for row in rows] == [date(2026, 9, 25)]
+
+
+def test_weekend_snapshot_with_filename_dates_keeps_weekend_report_date(
+    tmp_path: Path,
+) -> None:
+    account_root = tmp_path / "isa_kirill"
+    account_root.mkdir(parents=True, exist_ok=True)
+    (account_root / "holdings_2026-09-27_normalized.csv").write_text(
+        HOLDINGS_HEADER
+        + "h1,isa_kirill,ii,2026-09-27,AAA,Fund,1,125,,125,,,,GBP,holdings.pdf\n",
+        encoding="utf-8",
+    )
+
+    snapshot_dates = collect_holdings_snapshot_dates(tmp_path)
+    rows = summarize_unrealized_gains(tmp_path, tmp_path)
+
+    assert snapshot_dates == {"isa_kirill": {date(2026, 9, 27)}}
+    assert [row.valuation_date for row in rows] == [date(2026, 9, 27)]
+
+
+@pytest.mark.parametrize(
+    ("filename_date", "broker_date"),
+    [("2026-10-28", "2026-10-27"), ("2026-09-27", "2026-09-25")],
+)
+def test_mismatched_dates_use_filename_throughout_reports(
+    tmp_path: Path, filename_date: str, broker_date: str,
+) -> None:
+    normalized_root = tmp_path / "normalized"
+    account_root = normalized_root / "isa_thiago"
+    account_root.mkdir(parents=True)
+    (account_root / f"holdings_{filename_date}_normalized.csv").write_text(
+        HOLDINGS_HEADER
+        + f"h1,isa_thiago,hsbc,{broker_date},AAA,Fund,2,100,,200,,,,GBP,holdings.csv\n"
+        + "h2,isa_thiago,hsbc,,BBB,Fund,1,50,,50,,,,GBP,holdings.csv\n",
+        encoding="utf-8",
+    )
+    (account_root / "transactions_normalized.csv").write_text(
+        TRANSACTIONS_HEADER
+        + f"t1,isa_thiago,hsbc,{broker_date},,AAA,,1,100,buy,,100,,,GBP,transactions.csv\n"
+        + f"t2,isa_thiago,hsbc,{filename_date},,AAA,,1,50,buy,,50,,,GBP,transactions.csv\n",
+        encoding="utf-8",
+    )
+    output_root = tmp_path / "reports" / "unrealized"
+    report_account_root = output_root / "isa_thiago"
+    report_account_root.mkdir(parents=True)
+    stale_report = report_account_root / f"unrealized_gains_{broker_date}.csv"
+    stale_report.write_text("old report", encoding="utf-8")
+    notes = report_account_root / "unrealized_gains_notes.csv"
+    notes.write_text("notes", encoding="utf-8")
+    other_account_report = output_root / "other_account" / f"unrealized_gains_{broker_date}.csv"
+    other_account_report.parent.mkdir()
+    other_account_report.write_text("other account", encoding="utf-8")
+
+    rows = summarize_unrealized_gains(normalized_root, normalized_root)
+    snapshot_dates = collect_holdings_snapshot_dates(normalized_root)
+    write_unrealized_gain_reports(rows, output_root, snapshot_dates_by_account=snapshot_dates)
+    combined_path = tmp_path / "reports" / "unrealized_gains_report.csv"
+    write_combined_unrealized_gain_report(
+        rows, combined_path, snapshot_dates_by_account=snapshot_dates,
+    )
+
+    report_date = date.fromisoformat(filename_date)
+    assert snapshot_dates == {"isa_thiago": {report_date}}
+    assert [row.valuation_date for row in rows] == [report_date, report_date]
+    assert rows[0].book_cost == Decimal("150.00")
+    assert rows[0].unrealized_gain == Decimal("50.00")
+    for path in (combined_path, report_account_root / f"unrealized_gains_{filename_date}.csv"):
+        with path.open(encoding="utf-8", newline="") as handle:
+            csv_rows = list(csv.DictReader(handle))
+        assert len(csv_rows) == 2
+        assert {row["valuation_date"] for row in csv_rows} == {filename_date}
+    assert not stale_report.exists()
+    assert notes.read_text(encoding="utf-8") == "notes"
+    assert other_account_report.read_text(encoding="utf-8") == "other account"
+
+    snapshots = summarize_historical_performance(normalized_root, normalized_root)
+    assert [snapshot.valuation_date for snapshot in snapshots] == [report_date]
+    assert snapshots[0].unrealized_gain == Decimal("100.00")
+    assert snapshots[0].nominal_invested == Decimal("150.00")
 
 
 def test_per_snapshot_report_writes_empty_latest_snapshot_file(tmp_path: Path) -> None:

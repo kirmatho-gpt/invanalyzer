@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -271,14 +272,14 @@ def _write_sample_normalized_data(base: Path) -> None:
     )
 
     _write_csv(
-        base / "acct_a" / "holdings_2026-02-28_normalized.csv",
+        base / "acct_a" / "holdings_2026-02-27_normalized.csv",
         HOLDING_FIELDNAMES,
         rows=[
             {
                 "snapshot_id": "a_0228_aaa",
                 "account_name": "acct_a",
                 "broker": "ii",
-                "valuation_date": "2026-02-28",
+                "valuation_date": "2026-02-27",
                 "symbol": "AAA",
                 "name": "AAA plc",
                 "quantity": "10",
@@ -295,7 +296,7 @@ def _write_sample_normalized_data(base: Path) -> None:
                 "snapshot_id": "a_0228_bbb",
                 "account_name": "acct_a",
                 "broker": "ii",
-                "valuation_date": "2026-02-28",
+                "valuation_date": "2026-02-27",
                 "symbol": "BBB",
                 "name": "BBB plc",
                 "quantity": "2",
@@ -351,14 +352,14 @@ def _write_sample_normalized_data(base: Path) -> None:
         ],
     )
     _write_csv(
-        base / "acct_b" / "holdings_2026-02-28_normalized.csv",
+        base / "acct_b" / "holdings_2026-02-27_normalized.csv",
         HOLDING_FIELDNAMES,
         rows=[
             {
                 "snapshot_id": "b_0228_ccc",
                 "account_name": "acct_b",
                 "broker": "ii",
-                "valuation_date": "2026-02-28",
+                "valuation_date": "2026-02-27",
                 "symbol": "CCC",
                 "name": "CCC plc",
                 "quantity": "5",
@@ -384,7 +385,7 @@ def test_summarize_historical_performance_combines_unrealized_distributed_and_no
     rows = summarize_historical_performance(base, base)
     by_key = {(row.account_name, row.valuation_date.isoformat()): row for row in rows}
 
-    acct_a_feb = by_key[("acct_a", "2026-02-28")]
+    acct_a_feb = by_key[("acct_a", "2026-02-27")]
     assert acct_a_feb.realized_pnl == Decimal("0.00")
     assert acct_a_feb.unrealized_gain == Decimal("150.00")
     assert acct_a_feb.distributed_cashflow == Decimal("50.00")
@@ -402,7 +403,7 @@ def test_summarize_historical_performance_combines_unrealized_distributed_and_no
     assert acct_a_mar.nominal_invested == Decimal("1500.00")
     assert acct_a_mar.total_pnl == Decimal("-73.00")
 
-    acct_b_feb = by_key[("acct_b", "2026-02-28")]
+    acct_b_feb = by_key[("acct_b", "2026-02-27")]
     assert acct_b_feb.realized_pnl == Decimal("0.00")
     assert acct_b_feb.unrealized_gain == Decimal("50.00")
     assert acct_b_feb.distributed_cashflow == Decimal("10.00")
@@ -436,7 +437,7 @@ def test_write_historical_performance_report_uses_unprefixed_columns(tmp_path: P
         "nominal_invested",
         "performance_pct",
     ]
-    assert csv_rows[0]["valuation_date"] == "2026-02-28"
+    assert csv_rows[0]["valuation_date"] == "2026-02-27"
     assert csv_rows[0]["total_pnl"] == "195.00"
     assert csv_rows[0]["realized_pnl"] == "0.00"
     assert csv_rows[0]["nominal_invested"] == "1500.00"
@@ -463,7 +464,7 @@ def test_write_historical_performance_reports_outputs_per_account_and_aggregated
         reader = csv.DictReader(handle)
         csv_rows = list(reader)
 
-    assert csv_rows[0]["valuation_date"] == "2026-02-28"
+    assert csv_rows[0]["valuation_date"] == "2026-02-27"
     assert csv_rows[0]["total_pnl"] == "254.00"
     assert csv_rows[0]["realized_pnl"] == "0.00"
     assert csv_rows[0]["unrealized_gain"] == "200.00"
@@ -555,6 +556,235 @@ def test_nominal_invested_uses_snapshot_book_cost(tmp_path: Path) -> None:
     rows = summarize_historical_performance(base, base)
     assert len(rows) == 1
     assert rows[0].nominal_invested == Decimal("10.00")
+
+
+def test_historical_performance_uses_filename_date_for_weekend_holdings_file(
+    tmp_path: Path,
+) -> None:
+    base = tmp_path / "normalized"
+    _write_csv(
+        base / "acct_weekend" / "transactions_normalized.csv",
+        TRANSACTION_FIELDNAMES,
+        rows=[
+            {
+                "transaction_id": "weekend_buy",
+                "account_name": "acct_weekend",
+                "broker": "ii",
+                "trade_date": "2026-09-24",
+                "settlement_date": "2026-09-24",
+                "symbol": "AAA",
+                "sedol": "",
+                "quantity": "1",
+                "price": "100",
+                "description": "buy",
+                "reference": "",
+                "debit": "100",
+                "credit": "",
+                "running_balance": "",
+                "currency": "GBP",
+                "source_file": "in.csv",
+            },
+        ],
+    )
+    _write_csv(
+        base / "acct_weekend" / "holdings_2026-09-27_normalized.csv",
+        HOLDING_FIELDNAMES,
+        rows=[
+            {
+                "snapshot_id": "weekend_h_1",
+                "account_name": "acct_weekend",
+                "broker": "ii",
+                "valuation_date": "2026-09-25",
+                "symbol": "AAA",
+                "name": "AAA plc",
+                "quantity": "1",
+                "price": "125",
+                "average_price": "",
+                "market_value": "125",
+                "book_cost": "",
+                "gain_loss": "",
+                "gain_loss_pct": "",
+                "currency": "GBP",
+                "source_file": "holdings.csv",
+            },
+            {
+                "snapshot_id": "weekend_h_2",
+                "account_name": "acct_weekend",
+                "broker": "ii",
+                "valuation_date": "",
+                "symbol": "BBB",
+                "name": "BBB plc",
+                "quantity": "1",
+                "price": "50",
+                "average_price": "",
+                "market_value": "50",
+                "book_cost": "",
+                "gain_loss": "",
+                "gain_loss_pct": "",
+                "currency": "GBP",
+                "source_file": "holdings.csv",
+            },
+        ],
+    )
+
+    rows = summarize_historical_performance(base, base)
+
+    assert [row.valuation_date for row in rows] == [date(2026, 9, 27)]
+    assert rows[0].unrealized_gain == Decimal("75.00")
+    assert rows[0].nominal_invested == Decimal("100.00")
+
+
+def test_historical_performance_includes_header_only_weekend_holdings_snapshot(
+    tmp_path: Path,
+) -> None:
+    base = tmp_path / "normalized"
+    _write_csv(
+        base / "acct_weekend" / "transactions_normalized.csv",
+        TRANSACTION_FIELDNAMES,
+        rows=[
+            {
+                "transaction_id": "weekend_buy",
+                "account_name": "acct_weekend",
+                "broker": "ii",
+                "trade_date": "2026-09-24",
+                "settlement_date": "2026-09-24",
+                "symbol": "AAA",
+                "sedol": "",
+                "quantity": "1",
+                "price": "100",
+                "description": "buy",
+                "reference": "",
+                "debit": "100",
+                "credit": "",
+                "running_balance": "",
+                "currency": "GBP",
+                "source_file": "in.csv",
+            },
+            {
+                "transaction_id": "weekend_dividend",
+                "account_name": "acct_weekend",
+                "broker": "ii",
+                "trade_date": "2026-09-27",
+                "settlement_date": "2026-09-27",
+                "symbol": "",
+                "sedol": "",
+                "quantity": "",
+                "price": "",
+                "description": "dividend",
+                "reference": "",
+                "debit": "",
+                "credit": "10",
+                "running_balance": "",
+                "currency": "GBP",
+                "source_file": "in.csv",
+            },
+        ],
+    )
+    _write_csv(
+        base / "acct_weekend" / "holdings_2026-09-25_normalized.csv",
+        HOLDING_FIELDNAMES,
+        rows=[
+            {
+                "snapshot_id": "friday_h_1",
+                "account_name": "acct_weekend",
+                "broker": "ii",
+                "valuation_date": "2026-09-25",
+                "symbol": "AAA",
+                "name": "AAA plc",
+                "quantity": "1",
+                "price": "125",
+                "average_price": "",
+                "market_value": "125",
+                "book_cost": "",
+                "gain_loss": "",
+                "gain_loss_pct": "",
+                "currency": "GBP",
+                "source_file": "holdings.csv",
+            },
+        ],
+    )
+    _write_csv(
+        base / "acct_weekend" / "holdings_2026-09-27_normalized.csv",
+        HOLDING_FIELDNAMES,
+        rows=[],
+    )
+
+    rows = summarize_historical_performance(base, base)
+    output_base = tmp_path / "historical_performance_report.csv"
+    write_historical_performance_reports(rows, output_base)
+
+    with (tmp_path / "historical_performance_report_aggregated.csv").open(
+        "r",
+        encoding="utf-8",
+        newline="",
+    ) as handle:
+        csv_rows = list(csv.DictReader(handle))
+
+    assert [row.valuation_date for row in rows] == [date(2026, 9, 25), date(2026, 9, 27)]
+    assert [row["valuation_date"] for row in csv_rows] == ["2026-09-25", "2026-09-27"]
+    assert rows[0].distributed_cashflow == Decimal("0.00")
+    assert rows[0].unrealized_gain == Decimal("25.00")
+    assert rows[1].distributed_cashflow == Decimal("10.00")
+    assert rows[1].unrealized_gain == Decimal("0.00")
+    assert rows[1].nominal_invested == Decimal("0.00")
+
+
+def test_historical_performance_keeps_weekend_when_rows_match_filename(
+    tmp_path: Path,
+) -> None:
+    base = tmp_path / "normalized"
+    _write_csv(
+        base / "acct_weekend" / "transactions_normalized.csv",
+        TRANSACTION_FIELDNAMES,
+        rows=[
+            {
+                "transaction_id": "weekend_buy",
+                "account_name": "acct_weekend",
+                "broker": "ii",
+                "trade_date": "2026-09-24",
+                "settlement_date": "2026-09-24",
+                "symbol": "AAA",
+                "sedol": "",
+                "quantity": "1",
+                "price": "100",
+                "description": "buy",
+                "reference": "",
+                "debit": "100",
+                "credit": "",
+                "running_balance": "",
+                "currency": "GBP",
+                "source_file": "in.csv",
+            },
+        ],
+    )
+    _write_csv(
+        base / "acct_weekend" / "holdings_2026-09-27_normalized.csv",
+        HOLDING_FIELDNAMES,
+        rows=[
+            {
+                "snapshot_id": "weekend_h_1",
+                "account_name": "acct_weekend",
+                "broker": "ii",
+                "valuation_date": "2026-09-27",
+                "symbol": "AAA",
+                "name": "AAA plc",
+                "quantity": "1",
+                "price": "125",
+                "average_price": "",
+                "market_value": "125",
+                "book_cost": "",
+                "gain_loss": "",
+                "gain_loss_pct": "",
+                "currency": "GBP",
+                "source_file": "holdings.csv",
+            },
+        ],
+    )
+
+    rows = summarize_historical_performance(base, base)
+
+    assert [row.valuation_date for row in rows] == [date(2026, 9, 27)]
+    assert rows[0].unrealized_gain == Decimal("25.00")
 
 
 def test_realized_pnl_is_included_in_total_pnl(tmp_path: Path) -> None:

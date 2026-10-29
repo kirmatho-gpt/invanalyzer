@@ -182,6 +182,27 @@ def test_holdings_valuation_date_mismatch_warnings_detects_filename_row_date_mis
     assert "Please check the raw holdings file name against the broker valuation date." in warnings[0]
 
 
+def test_holdings_valuation_date_mismatch_warnings_allows_weekend_file_with_friday_valuation_date(
+    tmp_path: Path,
+) -> None:
+    normalized_root = tmp_path / "normalized"
+    account_root = normalized_root / "acct_a"
+    account_root.mkdir(parents=True, exist_ok=True)
+    header = "account_name,valuation_date,symbol\n"
+    (account_root / "holdings_2026-09-26_normalized.csv").write_text(
+        header + "acct_a,2026-09-25,AAA\n",
+        encoding="utf-8",
+    )
+    (account_root / "holdings_2026-09-27_normalized.csv").write_text(
+        header + "acct_a,2026-09-25,BBB\n",
+        encoding="utf-8",
+    )
+
+    warnings = _holdings_valuation_date_mismatch_warnings(normalized_root)
+
+    assert warnings == []
+
+
 def test_holdings_valuation_date_mismatch_warnings_honors_account_filter(
     tmp_path: Path,
 ) -> None:
